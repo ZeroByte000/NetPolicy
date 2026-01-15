@@ -122,8 +122,15 @@ jobs:
       - name: Download Xray binaries
         run: |
           XRAY_BASE="https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}"
-          curl -fL --retry 3 --retry-all-errors -o xray-arm64.zip "${XRAY_BASE}/Xray-android-arm64-v8a.zip"
-          curl -fL --retry 3 --retry-all-errors -o xray-armv7.zip "${XRAY_BASE}/Xray-android-arm32-v7a.zip"
+          XRAY_JSON=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/tags/v${XRAY_VERSION}")
+          ARM64_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm64-v8a.zip\"" | head -n1 | cut -d '"' -f4)
+          ARMV7_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm32-v7a.zip\"" | head -n1 | cut -d '"' -f4)
+          if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
+            echo "Xray Android assets not found for v${XRAY_VERSION}"
+            exit 1
+          fi
+          curl -fL --retry 3 --retry-all-errors -o xray-arm64.zip "$ARM64_URL"
+          curl -fL --retry 3 --retry-all-errors -o xray-armv7.zip "$ARMV7_URL"
           unzip -q xray-arm64.zip -d xray-arm64
           unzip -q xray-armv7.zip -d xray-armv7
           cp xray-arm64/xray android/app/src/main/assets/xray-arm64
@@ -187,7 +194,8 @@ jobs:
         run: |
           if [ "${{ matrix.version }}" = "snapshot" ]; then
             BASE_URL="https://downloads.openwrt.org/snapshots/targets/armvirt/${{ matrix.target }}/"
-            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "${BASE_URL}sha256sums" | awk '/openwrt-sdk-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
+            SHA_URL="${BASE_URL}sha256sums"
+            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL" | awk '/openwrt-sdk-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
             if [ -z "$SDK_FILE" ]; then
               echo "SDK file not found at $BASE_URL"
               exit 1
@@ -195,7 +203,8 @@ jobs:
             SDK_URL="${BASE_URL}${SDK_FILE}"
           else
             BASE_URL="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/armvirt/${{ matrix.target }}/"
-            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "${BASE_URL}sha256sums" | awk '/openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
+            SHA_URL="${BASE_URL}sha256sums"
+            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL" | awk '/openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
             if [ -z "$SDK_FILE" ]; then
               echo "SDK file not found at $BASE_URL"
               exit 1
