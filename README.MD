@@ -65,6 +65,13 @@ cd NetPolicy
 
 Opsi 2 (binary):
 - Download dari halaman Releases: https://github.com/ZeroByte000/NetPolicy/releases
+- Nama file release per platform:
+  - Linux x86_64: `netpolicyd-linux-x86_64.tar.gz`
+  - Linux ARM64: `netpolicyd-linux-aarch64.tar.gz`
+  - macOS Intel: `netpolicyd-macos-x86_64.tar.gz`
+  - macOS Apple Silicon: `netpolicyd-macos-arm64.tar.gz`
+  - Windows x86_64: `netpolicyd-windows-x86_64.zip`
+  - Windows ARM64: `netpolicyd-windows-arm64.zip`
 
 OpenWrt (HG680/HG680P):
 - Download `.ipk` dari release (22.03, 23.05, snapshot) dan install via `opkg`.
