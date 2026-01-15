@@ -121,8 +121,9 @@ jobs:
 
       - name: Download Xray binaries
         run: |
-          wget -q https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-android-arm64-v8a.zip -O xray-arm64.zip
-          wget -q https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-android-arm32-v7a.zip -O xray-armv7.zip
+          XRAY_BASE="https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}"
+          curl -fL --retry 3 --retry-all-errors -o xray-arm64.zip "${XRAY_BASE}/Xray-android-arm64-v8a.zip"
+          curl -fL --retry 3 --retry-all-errors -o xray-armv7.zip "${XRAY_BASE}/Xray-android-arm32-v7a.zip"
           unzip -q xray-arm64.zip -d xray-arm64
           unzip -q xray-armv7.zip -d xray-armv7
           cp xray-arm64/xray android/app/src/main/assets/xray-arm64
@@ -186,7 +187,7 @@ jobs:
         run: |
           if [ "${{ matrix.version }}" = "snapshot" ]; then
             BASE_URL="https://downloads.openwrt.org/snapshots/targets/armvirt/${{ matrix.target }}/"
-            SDK_FILE=$(wget -qO- "${BASE_URL}sha256sums" | awk '/openwrt-sdk-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
+            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "${BASE_URL}sha256sums" | awk '/openwrt-sdk-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
             if [ -z "$SDK_FILE" ]; then
               echo "SDK file not found at $BASE_URL"
               exit 1
@@ -194,14 +195,14 @@ jobs:
             SDK_URL="${BASE_URL}${SDK_FILE}"
           else
             BASE_URL="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/armvirt/${{ matrix.target }}/"
-            SDK_FILE=$(wget -qO- "${BASE_URL}sha256sums" | awk '/openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
+            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "${BASE_URL}sha256sums" | awk '/openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
             if [ -z "$SDK_FILE" ]; then
               echo "SDK file not found at $BASE_URL"
               exit 1
             fi
             SDK_URL="${BASE_URL}${SDK_FILE}"
           fi
-          wget -qO sdk.tar.xz "$SDK_URL"
+          curl -fL --retry 3 --retry-all-errors -o sdk.tar.xz "$SDK_URL"
           mkdir sdk
           tar -xJf sdk.tar.xz -C sdk --strip-components=1
 
