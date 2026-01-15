@@ -82,7 +82,7 @@ jobs:
     permissions:
       contents: write
     env:
-      XRAY_VERSION: "1.8.24"
+      XRAY_VERSION: "latest"
       NDK_VERSION: "26.1.10909125"
     steps:
       - uses: actions/checkout@v4
@@ -121,12 +121,20 @@ jobs:
 
       - name: Download Xray binaries
         run: |
-          XRAY_BASE="https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}"
-          XRAY_JSON=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/tags/v${XRAY_VERSION}")
+          if [ "${XRAY_VERSION}" = "latest" ]; then
+            XRAY_JSON=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/latest")
+          else
+            XRAY_JSON=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/tags/v${XRAY_VERSION}")
+          fi
           ARM64_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm64-v8a.zip\"" | head -n1 | cut -d '"' -f4)
           ARMV7_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm32-v7a.zip\"" | head -n1 | cut -d '"' -f4)
           if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
-            echo "Xray Android assets not found for v${XRAY_VERSION}"
+            XRAY_JSON=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/latest")
+            ARM64_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm64-v8a.zip\"" | head -n1 | cut -d '"' -f4)
+            ARMV7_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm32-v7a.zip\"" | head -n1 | cut -d '"' -f4)
+          fi
+          if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
+            echo "Xray Android assets not found"
             exit 1
           fi
           curl -fL --retry 3 --retry-all-errors -o xray-arm64.zip "$ARM64_URL"
@@ -172,7 +180,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        version: ["22.03.7", "23.05.4", "snapshot"]
+        version: ["22.03", "23.05", "snapshot"]
         target: ["64"]
     steps:
       - uses: actions/checkout@v4
@@ -200,11 +208,21 @@ jobs:
               echo "SDK file not found at $BASE_URL"
               exit 1
             fi
+            echo "OWRT_VERSION=snapshot" >> $GITHUB_ENV
             SDK_URL="${BASE_URL}${SDK_FILE}"
           else
-            BASE_URL="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/armvirt/${{ matrix.target }}/"
+            SERIES="${{ matrix.version }}"
+            RELEASE_INDEX="https://downloads.openwrt.org/releases/"
+            LATEST=$(curl -fSL --retry 3 --retry-all-errors "$RELEASE_INDEX" | grep -o "href=\\\"${SERIES}\\.[0-9]\\+/\\\"" | sed -E "s/.*${SERIES}\\.([0-9]+)\\/\"/\\1/" | sort -V | tail -n1)
+            if [ -z "$LATEST" ]; then
+              echo "No release found for series ${SERIES}"
+              exit 1
+            fi
+            VERSION="${SERIES}.${LATEST}"
+            echo "OWRT_VERSION=${VERSION}" >> $GITHUB_ENV
+            BASE_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/armvirt/${{ matrix.target }}/"
             SHA_URL="${BASE_URL}sha256sums"
-            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL" | awk '/openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
+            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL" | awk "/openwrt-sdk-${VERSION}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print \$2; exit}")
             if [ -z "$SDK_FILE" ]; then
               echo "SDK file not found at $BASE_URL"
               exit 1
@@ -233,10 +251,10 @@ jobs:
 
       - name: Package
         run: |
-          tar -czf netpolicyd-openwrt-${{ matrix.version }}-armvirt-${{ matrix.target }}.tar.gz -C dist .
+          tar -czf netpolicyd-openwrt-${{ env.OWRT_VERSION }}-armvirt-${{ matrix.target }}.tar.gz -C dist .
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            netpolicyd-openwrt-${{ matrix.version }}-armvirt-${{ matrix.target }}.tar.gz
+            netpolicyd-openwrt-${{ env.OWRT_VERSION }}-armvirt-${{ matrix.target }}.tar.gz
