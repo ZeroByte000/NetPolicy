@@ -24,7 +24,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             artifact: netpolicyd-linux-aarch64.tar.gz
             use_cross: true
-          - os: macos-13
+          - os: macos-12
             target: x86_64-apple-darwin
             artifact: netpolicyd-macos-x86_64.tar.gz
             use_cross: false
@@ -101,6 +101,10 @@ jobs:
           sdkmanager "ndk;${NDK_VERSION}"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> $GITHUB_ENV
+
+      - name: Install Rust targets (Android)
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
@@ -180,9 +184,21 @@ jobs:
       - name: Download OpenWrt SDK
         run: |
           if [ "${{ matrix.version }}" = "snapshot" ]; then
-            SDK_URL="https://downloads.openwrt.org/snapshots/targets/armvirt/${{ matrix.target }}/openwrt-sdk-armvirt-${{ matrix.target }}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            BASE_URL="https://downloads.openwrt.org/snapshots/targets/armvirt/${{ matrix.target }}/"
+            SDK_FILE=$(wget -qO- "$BASE_URL" | grep -o "openwrt-sdk-armvirt-${{ matrix.target }}_gcc-[0-9.]*_musl.Linux-x86_64.tar.xz" | head -n1)
+            if [ -z "$SDK_FILE" ]; then
+              echo "SDK file not found at $BASE_URL"
+              exit 1
+            fi
+            SDK_URL="${BASE_URL}${SDK_FILE}"
           else
-            SDK_URL="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/armvirt/${{ matrix.target }}/openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            BASE_URL="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/armvirt/${{ matrix.target }}/"
+            SDK_FILE=$(wget -qO- "$BASE_URL" | grep -o "openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-[0-9.]*_musl.Linux-x86_64.tar.xz" | head -n1)
+            if [ -z "$SDK_FILE" ]; then
+              echo "SDK file not found at $BASE_URL"
+              exit 1
+            fi
+            SDK_URL="${BASE_URL}${SDK_FILE}"
           fi
           wget -qO sdk.tar.xz "$SDK_URL"
           mkdir sdk
