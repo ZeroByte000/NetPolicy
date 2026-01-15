@@ -5,8 +5,13 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -74,8 +79,11 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       XRAY_VERSION: "1.8.24"
+      NDK_VERSION: "26.1.10909125"
     steps:
       - uses: actions/checkout@v4
 
@@ -87,19 +95,24 @@ jobs:
       - uses: android-actions/setup-android@v3
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi
 
-      - name: Build (arm64-v8a)
-        run: cargo build --release --bin netpolicyd --target aarch64-linux-android
+      - name: Install NDK
+        run: |
+          sdkmanager "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> $GITHUB_ENV
 
-      - name: Build (armeabi-v7a)
-        run: cargo build --release --bin netpolicyd --target armv7-linux-androideabi
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build (Android)
+        run: |
+          cargo ndk -t arm64-v8a -t armeabi-v7a -o target/android build --release --bin netpolicyd
 
       - name: Prepare Android assets
         run: |
-          cp target/aarch64-linux-android/release/netpolicyd android/app/src/main/assets/netpolicyd-arm64
-          cp target/armv7-linux-androideabi/release/netpolicyd android/app/src/main/assets/netpolicyd-armv7
+          cp target/android/arm64-v8a/release/netpolicyd android/app/src/main/assets/netpolicyd-arm64
+          cp target/android/armeabi-v7a/release/netpolicyd android/app/src/main/assets/netpolicyd-armv7
 
       - name: Download Xray binaries
         run: |
@@ -142,10 +155,12 @@ jobs:
 
   openwrt:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       matrix:
         version: ["22.03.7", "23.05.4", "snapshot"]
-        target: ["aarch64_cortex-a53"]
+        target: ["64"]
     steps:
       - uses: actions/checkout@v4
 
@@ -191,10 +206,10 @@ jobs:
 
       - name: Package
         run: |
-          tar -czf netpolicyd-openwrt-${{ matrix.version }}-${{ matrix.target }}.tar.gz -C dist .
+          tar -czf netpolicyd-openwrt-${{ matrix.version }}-armvirt-${{ matrix.target }}.tar.gz -C dist .
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            netpolicyd-openwrt-${{ matrix.version }}-${{ matrix.target }}.tar.gz
+            netpolicyd-openwrt-${{ matrix.version }}-armvirt-${{ matrix.target }}.tar.gz
