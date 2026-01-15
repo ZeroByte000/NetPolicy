@@ -1,0 +1,173 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "tag": "http",
+      "port": 7890,
+      "listen": "0.0.0.0",
+      "protocol": "http",
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    },
+    {
+      "tag": "socks",
+      "port": 7891,
+      "listen": "0.0.0.0",
+      "protocol": "socks",
+      "settings": {"udp": true},
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    },
+    {
+      "tag": "redir",
+      "port": 7892,
+      "listen": "0.0.0.0",
+      "protocol": "dokodemo-door",
+      "settings": {"network": "tcp,udp", "followRedirect": true},
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    },
+    {
+      "tag": "mixed",
+      "port": 7893,
+      "listen": "0.0.0.0",
+      "protocol": "socks",
+      "settings": {"udp": true},
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    },
+    {
+      "tag": "tproxy",
+      "port": 7895,
+      "listen": "0.0.0.0",
+      "protocol": "dokodemo-door",
+      "settings": {"network": "tcp,udp", "followRedirect": true, "tproxy": "tproxy"},
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "Vmess-Demo",
+      "protocol": "vmess",
+      "settings": {
+        "vnext": [
+          {
+            "address": "example.com",
+            "port": 443,
+            "users": [
+              {"id": "123e4567-e89b-12d3-a456-426614174000", "alterId": 0, "security": "auto"}
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {"serverName": "example.com"},
+        "wsSettings": {"path": "/ws", "headers": {"Host": "example.com"}}
+      }
+    },
+    {
+      "tag": "Vless-Demo",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "vless.example.com",
+            "port": 443,
+            "users": [
+              {"id": "123e4567-e89b-12d3-a456-426614174000", "encryption": "none"}
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": {"serverName": "vless.example.com"},
+        "wsSettings": {"path": "/ws", "headers": {"Host": "vless.example.com"}}
+      }
+    },
+    {
+      "tag": "Trojan-Demo",
+      "protocol": "trojan",
+      "settings": {
+        "servers": [
+          {"address": "trojan.example.com", "port": 443, "password": "password123"}
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {"serverName": "trojan.example.com"}
+      }
+    },
+    {
+      "tag": "SS-Demo",
+      "protocol": "shadowsocks",
+      "settings": {
+        "servers": [
+          {"address": "ss.example.com", "port": 8388, "method": "aes-128-gcm", "password": "pass123"}
+        ]
+      }
+    },
+    {
+      "tag": "Socks-Demo",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {"address": "socks.example.com", "port": 1080, "users": [{"user": "user", "pass": "pass"}]}
+        ]
+      }
+    },
+    {
+      "tag": "Http-Demo",
+      "protocol": "http",
+      "settings": {
+        "servers": [
+          {"address": "proxy.example.com", "port": 3128, "users": [{"user": "user", "pass": "pass"}]}
+        ]
+      }
+    },
+    {"tag": "direct", "protocol": "freedom"},
+    {"tag": "reject", "protocol": "blackhole"}
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [],
+    "balancers": [
+      {"tag": "best_ping", "selector": ["Vmess-Demo", "Vless-Demo", "Trojan-Demo", "SS-Demo", "Socks-Demo", "Http-Demo"], "strategy": {"type": "leastPing"}},
+      {"tag": "load_balance", "selector": ["Vmess-Demo", "Vless-Demo", "Trojan-Demo", "SS-Demo", "Socks-Demo", "Http-Demo"], "strategy": {"type": "random"}},
+      {"tag": "fallback", "selector": ["Vmess-Demo", "Vless-Demo", "Trojan-Demo", "SS-Demo", "Socks-Demo", "Http-Demo"], "strategy": {"type": "random"}}
+    ]
+  },
+  "dns": {
+    "servers": [
+      {"address": "8.8.8.8"},
+      {"address": "1.0.0.1"},
+      {"address": "https://dns.google/dns-query"},
+      {"address": "dhcp"},
+      {"address": "192.168.9.8"},
+      {"address": "https://doh.pub/dns-query"},
+      {"address": "https://dns.alidns.com/dns-query"},
+      {"address": "1.1.1.1"},
+      {"address": "8.8.4.4"},
+      {"address": "https://cloudflare-dns.com/dns-query"},
+      {"address": "112.215.203.254"}
+    ],
+    "queryStrategy": "UseIPv4"
+  }
+}

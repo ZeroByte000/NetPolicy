@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NetPolicy Xray</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <nav class="topbar">
+    <div class="brand">NetPolicy</div>
+    <div class="nav-links">
+      <a href="/ruleset.html">Ruleset</a>
+      <a href="/xray.html">Xray</a>
+      <a href="/settings.html">Settings</a>
+    </div>
+    <button id="menu-toggle" class="menu-toggle" aria-label="Open menu">☰</button>
+  </nav>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <span>Menu</span>
+      <button id="menu-close" class="menu-close" aria-label="Close menu">✕</button>
+    </div>
+    <a href="/ruleset.html">Ruleset</a>
+    <a href="/xray.html">Xray</a>
+    <a href="/settings.html">Settings</a>
+  </aside>
+  <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+  <main class="shell">
+    <header class="hero">
+      <div class="badge">Xray</div>
+      <h1>Gateway Manager</h1>
+      <p>Import akun, generate config, dan kontrol runtime Xray.</p>
+    </header>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Xray Generator</h2>
+        <textarea id="xray-urls" spellcheck="false" placeholder="vmess://...\nvless://...\nss://..."></textarea>
+        <div class="actions">
+          <button id="xray-gen">Import & Save</button>
+        </div>
+        <div class="hint">Tags umum untuk ruleset NetPolicy: direct, reject, best_ping, load_balance, fallback.</div>
+      </div>
+      <div class="panel">
+        <h2>Xray Output</h2>
+        <pre id="xray-output">No data yet.</pre>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Xray Control</h2>
+        <div class="actions">
+          <button id="xray-start">Start</button>
+          <button id="xray-stop" class="ghost">Stop</button>
+          <button id="xray-restart" class="ghost">Restart</button>
+          <button id="xray-status" class="ghost">Status</button>
+        </div>
+        <pre id="xray-status-output">Unknown</pre>
+        <div class="field">
+          <label for="xray-ui-host">Xray UI Host</label>
+          <input id="xray-ui-host" value="127.0.0.1:9090" />
+        </div>
+        <div class="field">
+          <label for="xray-ui-base">Xray UI Base Path</label>
+          <input id="xray-ui-base" value="/ui" />
+        </div>
+        <div class="actions">
+          <button id="open-metacube" class="ghost">Open MetaCube</button>
+          <button id="open-yacd" class="ghost">Open YACD</button>
+        </div>
+        <div class="actions">
+          <label class="toggle">
+            <input id="xray-auto-refresh" type="checkbox" />
+            Auto refresh status
+          </label>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Xray Logs</h2>
+        <div class="actions">
+          <button id="xray-refresh-logs" class="ghost">Refresh</button>
+        </div>
+        <pre id="xray-logs">No logs yet.</pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

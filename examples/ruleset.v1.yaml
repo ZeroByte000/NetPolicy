@@ -1,0 +1,36 @@
+rules:
+  - name: zoom_priority
+    priority: 100
+    when:
+      state: NORMAL
+    match:
+      sni: "*.zoom.us"
+      protocol: tcp
+    action:
+      route: tunnel_fast
+
+  - name: fallback_if_high_latency
+    priority: 80
+    when:
+      state: [DEGRADED, FAILOVER]
+    match:
+      latency_ms: ">120"
+    action:
+      switch_route: backup
+
+  - name: block_suspicious_port
+    priority: 60
+    disable: FAILOVER
+    match:
+      port: "6667,1000-2000"
+      protocol: tcp
+    action:
+      block: true
+
+  - name: default_log
+    priority: 10
+    match:
+      any: true
+    action:
+      route: direct
+      log: true

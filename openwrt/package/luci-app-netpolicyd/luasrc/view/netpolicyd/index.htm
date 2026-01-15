@@ -1,0 +1,211 @@
+<%+header%>
+
+<h2>NetPolicy</h2>
+<p>UI ringan untuk dry-run dan log. Pastikan netpolicyd berjalan dengan <code>--web</code> pada <code>127.0.0.1:8787</code>.</p>
+
+<div style="display:flex;gap:20px;flex-wrap:wrap;">
+  <div style="flex:1;min-width:320px;">
+    <h3>Ruleset YAML</h3>
+    <textarea id="ruleset" style="width:100%;min-height:260px;"></textarea>
+    <div style="margin-top:8px;">
+      <input id="ruleset-file" type="file" />
+    </div>
+  </div>
+  <div style="flex:1;min-width:260px;">
+    <h3>Context</h3>
+    <label>State</label>
+    <select id="state">
+      <option value="normal">NORMAL</option>
+      <option value="degraded">DEGRADED</option>
+      <option value="failover">FAILOVER</option>
+      <option value="recovery">RECOVERY</option>
+    </select>
+    <div>
+      <label>SNI</label>
+      <input id="sni" style="width:100%;" placeholder="api.zoom.us" />
+    </div>
+    <div>
+      <label>Protocol</label>
+      <input id="protocol" style="width:100%;" placeholder="tcp" />
+    </div>
+    <div>
+      <label>Port</label>
+      <input id="port" style="width:100%;" placeholder="443" />
+    </div>
+    <div>
+      <label>Latency (ms)</label>
+      <input id="latency" style="width:100%;" placeholder="120" />
+    </div>
+    <div>
+      <label>RTT (ms)</label>
+      <input id="rtt" style="width:100%;" placeholder="80" />
+    </div>
+    <div style="margin-top:10px;">
+      <button id="run">Dry Run</button>
+      <button id="load" class="cbi-button">Load Sample</button>
+    </div>
+  </div>
+</div>
+
+<h3>Decision</h3>
+<pre id="decision">No data</pre>
+
+<h3>Xray Generator</h3>
+<textarea id="xray-urls" style="width:100%;min-height:160px;" placeholder="vmess://..."></textarea>
+<div style="margin-top:10px;">
+  <button id="xray-gen">Generate</button>
+</div>
+<pre id="xray-output">No data</pre>
+
+<h3>Xray Control</h3>
+<div style="margin-bottom:10px;">
+  <button id="xray-start">Start</button>
+  <button id="xray-stop" class="cbi-button">Stop</button>
+  <button id="xray-restart" class="cbi-button">Restart</button>
+  <button id="xray-status" class="cbi-button">Status</button>
+</div>
+<pre id="xray-status-output">Unknown</pre>
+
+<h3>Xray Logs</h3>
+<button id="xray-logs">Refresh Logs</button>
+<pre id="xray-logbox">No logs</pre>
+
+<h3>Logs</h3>
+<button id="logs">Refresh Logs</button>
+<pre id="logbox">No logs</pre>
+
+<script type="text/javascript">
+const sampleRuleset = `rules:\n  - name: zoom_priority\n    priority: 100\n    when:\n      state: NORMAL\n    match:\n      sni: "*.zoom.us"\n      protocol: tcp\n    action:\n      route: tunnel_fast\n\n  - name: fallback_if_high_latency\n    priority: 80\n    when:\n      state: [DEGRADED, FAILOVER]\n    match:\n      latency_ms: ">120"\n    action:\n      switch_route: backup\n\n  - name: default_log\n    priority: 10\n    match:\n      any: true\n    action:\n      route: direct\n      log: true\n`;
+
+const rulesetEl = document.getElementById("ruleset");
+const decisionEl = document.getElementById("decision");
+const logEl = document.getElementById("logbox");
+const xrayStatusEl = document.getElementById("xray-status-output");
+const xrayLogEl = document.getElementById("xray-logbox");
+const rulesetFileEl = document.getElementById("ruleset-file");
+const xrayUrlsEl = document.getElementById("xray-urls");
+const xrayOutputEl = document.getElementById("xray-output");
+
+if (!rulesetEl.value) {
+  rulesetEl.value = sampleRuleset;
+}
+
+function parseNumber(value) {
+  if (!value) return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+async function dryRun() {
+  const payload = {
+    ruleset: rulesetEl.value,
+    state: document.getElementById("state").value,
+    context: {
+      sni: document.getElementById("sni").value || null,
+      protocol: document.getElementById("protocol").value || null,
+      port: parseNumber(document.getElementById("port").value),
+      latency_ms: parseNumber(document.getElementById("latency").value),
+      rtt_ms: parseNumber(document.getElementById("rtt").value),
+    },
+  };
+
+  decisionEl.textContent = "Running...";
+  try {
+    const res = await fetch("http://127.0.0.1:8787/api/dry-run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      decisionEl.textContent = "Error: " + (data.error || "unknown");
+      return;
+    }
+    decisionEl.textContent = `state: ${data.state}\nrule: ${data.rule || "<none>"}\naction: ${data.action || "<none>"}`;
+  } catch (err) {
+    decisionEl.textContent = "Error: " + err;
+  }
+}
+
+async function refreshLogs() {
+  logEl.textContent = "Loading...";
+  try {
+    const res = await fetch("http://127.0.0.1:8787/api/logs");
+    const data = await res.json();
+    logEl.textContent = data.ok ? (data.content || "No logs") : (data.error || "No logs");
+  } catch (err) {
+    logEl.textContent = "Error: " + err;
+  }
+}
+
+async function generateXray() {
+  const urlsText = xrayUrlsEl.value || "";
+  xrayOutputEl.textContent = "Generating...";
+  try {
+    const res = await fetch("http://127.0.0.1:8787/api/xray-gen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls_text: urlsText }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      xrayOutputEl.textContent = "Error: " + (data.error || "unknown");
+      return;
+    }
+    const saved = data.saved_to ? ("\\n(saved: " + data.saved_to + ")") : "";
+    xrayOutputEl.textContent = (data.config || "{}") + saved;
+  } catch (err) {
+    xrayOutputEl.textContent = "Error: " + err;
+  }
+}
+
+async function xrayAction(path) {
+  xrayStatusEl.textContent = "Working...";
+  try {
+    const res = await fetch("http://127.0.0.1:8787" + path, { method: path === "/api/xray/status" ? "GET" : "POST" });
+    const data = await res.json();
+    if (!data.ok) {
+      xrayStatusEl.textContent = "Error: " + (data.error || "unknown");
+      return;
+    }
+    const pid = data.pid ? ("pid=" + data.pid) : "pid=<none>";
+    xrayStatusEl.textContent = "running=" + data.running + " " + pid;
+  } catch (err) {
+    xrayStatusEl.textContent = "Error: " + err;
+  }
+}
+
+async function refreshXrayLogs() {
+  xrayLogEl.textContent = "Loading...";
+  try {
+    const res = await fetch("http://127.0.0.1:8787/api/xray/logs");
+    const data = await res.json();
+    xrayLogEl.textContent = data.ok ? (data.content || "No logs") : (data.error || "No logs");
+  } catch (err) {
+    xrayLogEl.textContent = "Error: " + err;
+  }
+}
+
+document.getElementById("run").addEventListener("click", dryRun);
+document.getElementById("load").addEventListener("click", function() {
+  rulesetEl.value = sampleRuleset;
+});
+document.getElementById("logs").addEventListener("click", refreshLogs);
+document.getElementById("xray-gen").addEventListener("click", generateXray);
+document.getElementById("xray-start").addEventListener("click", function() { xrayAction("/api/xray/start"); });
+document.getElementById("xray-stop").addEventListener("click", function() { xrayAction("/api/xray/stop"); });
+document.getElementById("xray-restart").addEventListener("click", function() { xrayAction("/api/xray/restart"); });
+document.getElementById("xray-status").addEventListener("click", function() { xrayAction("/api/xray/status"); });
+document.getElementById("xray-logs").addEventListener("click", refreshXrayLogs);
+rulesetFileEl.addEventListener("change", function(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function() {
+    rulesetEl.value = String(reader.result || \"\");
+  };
+  reader.readAsText(file);
+});
+</script>
+
+<%+footer%>

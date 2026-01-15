@@ -1,0 +1,34 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+USE_PROCD=1
+
+PROG=/usr/bin/netpolicyd
+
+start_service() {
+    config_load netpolicyd
+    config_get enabled main enabled 0
+    [ "$enabled" = "1" ] || return 0
+
+    config_get config_path main config /etc/netpolicyd/rules.yaml
+    config_get state main state normal
+    config_get web main web 1
+    config_get bind main bind 0.0.0.0:8787
+    config_get web_root main web_root /usr/share/netpolicyd
+    config_get log_file main log_file /var/log/netpolicyd.log
+    config_get xray_bin main xray_bin /usr/bin/xray
+    config_get xray_config main xray_config /etc/xray/config.json
+    config_get xray_log main xray_log /var/log/xray.log
+    config_get xray_autostart main xray_autostart 0
+
+    procd_open_instance
+    procd_set_param command $PROG --config "$config_path" --state "$state" --log-file "$log_file" --xray-gen "$xray_config" --xray-bin "$xray_bin" --xray-config "$xray_config" --xray-log "$xray_log"
+    if [ "$web" = "1" ]; then
+        procd_append_param command --web --bind "$bind" --web-root "$web_root"
+    fi
+    if [ "$xray_autostart" = "1" ]; then
+        procd_append_param command --xray-autostart
+    fi
+    procd_set_param respawn
+    procd_close_instance
+}

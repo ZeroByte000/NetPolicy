@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NetPolicy Local UI</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <nav class="topbar">
+    <div class="brand">NetPolicy</div>
+    <div class="nav-links">
+      <a href="/ruleset.html">Ruleset</a>
+      <a href="/xray.html">Xray</a>
+      <a href="/settings.html">Settings</a>
+    </div>
+    <button id="menu-toggle" class="menu-toggle" aria-label="Open menu">☰</button>
+  </nav>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <span>Menu</span>
+      <button id="menu-close" class="menu-close" aria-label="Close menu">✕</button>
+    </div>
+    <a href="/ruleset.html">Ruleset</a>
+    <a href="/xray.html">Xray</a>
+    <a href="/settings.html">Settings</a>
+  </aside>
+  <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+  <main class="shell">
+    <header class="hero">
+      <div class="badge">NetPolicy</div>
+      <h1>Control Hub</h1>
+      <p>Pilih halaman untuk ruleset, Xray gateway, atau settings.</p>
+    </header>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Ruleset</h2>
+        <p>Dry-run policy dengan context dan ruleset YAML.</p>
+        <div class="actions">
+          <a class="button-link" href="/ruleset.html">Open Ruleset</a>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Xray</h2>
+        <p>Import akun, generate config, dan kontrol runtime Xray.</p>
+        <div class="actions">
+          <a class="button-link" href="/xray.html">Open Xray</a>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Settings</h2>
+        <p>VPN gateway dan opsi tambahan lainnya.</p>
+        <div class="actions">
+          <a class="button-link" href="/settings.html">Open Settings</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

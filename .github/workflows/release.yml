@@ -1,0 +1,159 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release --bin netpolicyd
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          tar -czf netpolicyd-${{ runner.os }}.tar.gz -C target/release netpolicyd
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Compress-Archive -Path target\\release\\netpolicyd.exe -DestinationPath netpolicyd-Windows.zip
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            netpolicyd-*.tar.gz
+            netpolicyd-*.zip
+
+  android:
+    runs-on: ubuntu-latest
+    env:
+      XRAY_VERSION: "1.8.24"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Build (arm64-v8a)
+        run: cargo build --release --bin netpolicyd --target aarch64-linux-android
+
+      - name: Build (armeabi-v7a)
+        run: cargo build --release --bin netpolicyd --target armv7-linux-androideabi
+
+      - name: Prepare Android assets
+        run: |
+          cp target/aarch64-linux-android/release/netpolicyd android/app/src/main/assets/netpolicyd-arm64
+          cp target/armv7-linux-androideabi/release/netpolicyd android/app/src/main/assets/netpolicyd-armv7
+
+      - name: Download Xray binaries
+        run: |
+          wget -q https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-android-arm64-v8a.zip -O xray-arm64.zip
+          wget -q https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-android-arm32-v7a.zip -O xray-armv7.zip
+          unzip -q xray-arm64.zip -d xray-arm64
+          unzip -q xray-armv7.zip -d xray-armv7
+          cp xray-arm64/xray android/app/src/main/assets/xray-arm64
+          cp xray-armv7/xray android/app/src/main/assets/xray-armv7
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.2.1-bin.zip
+          unzip -q gradle-8.2.1-bin.zip -d $HOME/gradle
+          echo "$HOME/gradle/gradle-8.2.1/bin" >> $GITHUB_PATH
+
+      - name: Build APK
+        run: gradle -p android assembleRelease
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/aarch64-linux-android/release/netpolicyd dist/netpolicyd-android-arm64
+          cp target/armv7-linux-androideabi/release/netpolicyd dist/netpolicyd-android-armv7
+          tar -czf netpolicyd-android-arm64.tar.gz -C dist netpolicyd-android-arm64
+          tar -czf netpolicyd-android-armv7.tar.gz -C dist netpolicyd-android-armv7
+          cp android/app/build/outputs/apk/release/app-release.apk dist/netpolicyd-android.apk
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            netpolicyd-android-arm64.tar.gz
+            netpolicyd-android-armv7.tar.gz
+            dist/netpolicyd-android.apk
+
+  openwrt:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ["22.03.7", "23.05.4", "snapshot"]
+        target: ["aarch64_cortex-a53"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y build-essential unzip xz-utils wget rsync
+
+      - name: Download OpenWrt SDK
+        run: |
+          if [ "${{ matrix.version }}" = "snapshot" ]; then
+            SDK_URL="https://downloads.openwrt.org/snapshots/targets/armvirt/${{ matrix.target }}/openwrt-sdk-armvirt-${{ matrix.target }}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          else
+            SDK_URL="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/armvirt/${{ matrix.target }}/openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          fi
+          wget -qO sdk.tar.xz "$SDK_URL"
+          mkdir sdk
+          tar -xJf sdk.tar.xz -C sdk --strip-components=1
+
+      - name: Build netpolicyd for OpenWrt
+        run: |
+          cd sdk
+          ./staging_dir/host/bin/rustc --version || true
+          cp -r ../openwrt/package/netpolicyd package/
+          cp -r ../openwrt/package/luci-app-netpolicyd package/
+          mkdir -p package/netpolicyd/files
+          # build via musl target for aarch64
+          cargo build --release --bin netpolicyd --target aarch64-unknown-linux-musl
+          cp ../target/aarch64-unknown-linux-musl/release/netpolicyd package/netpolicyd/files/netpolicyd
+          make defconfig
+          make package/netpolicyd/compile V=s
+          make package/luci-app-netpolicyd/compile V=s
+
+      - name: Collect artifacts
+        run: |
+          cd sdk
+          mkdir -p ../dist
+          find bin/packages -name "netpolicyd_*.ipk" -exec cp {} ../dist/ \\;
+          find bin/packages -name "luci-app-netpolicyd_*.ipk" -exec cp {} ../dist/ \\;
+
+      - name: Package
+        run: |
+          tar -czf netpolicyd-openwrt-${{ matrix.version }}-${{ matrix.target }}.tar.gz -C dist .
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            netpolicyd-openwrt-${{ matrix.version }}-${{ matrix.target }}.tar.gz

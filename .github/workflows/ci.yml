@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  web-assets-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check web assets synced to Android
+        run: |
+          for file in index.html style.css app.js; do
+            if ! cmp -s "web/$file" "android/app/src/main/assets/web/$file"; then
+              echo "web/$file is not in sync with android/app/src/main/assets/web/$file"
+              exit 1
+            fi
+          done

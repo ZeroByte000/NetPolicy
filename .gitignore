@@ -1,0 +1,7 @@
+target/
+.DS_Store
+openwrt/package/netpolicyd/files/netpolicyd
+android/.gradle/
+android/app/build/
+android/.idea/
+tag.txt

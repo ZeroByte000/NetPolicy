@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NetPolicy Ruleset</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <nav class="topbar">
+    <div class="brand">NetPolicy</div>
+    <div class="nav-links">
+      <a href="/ruleset.html">Ruleset</a>
+      <a href="/xray.html">Xray</a>
+      <a href="/settings.html">Settings</a>
+    </div>
+    <button id="menu-toggle" class="menu-toggle" aria-label="Open menu">☰</button>
+  </nav>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <span>Menu</span>
+      <button id="menu-close" class="menu-close" aria-label="Close menu">✕</button>
+    </div>
+    <a href="/ruleset.html">Ruleset</a>
+    <a href="/xray.html">Xray</a>
+    <a href="/settings.html">Settings</a>
+  </aside>
+  <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+  <main class="shell">
+    <header class="hero">
+      <div class="badge">Ruleset</div>
+      <h1>Policy Evaluation</h1>
+      <p>Dry-run ruleset dan context tanpa menjalankan traffic.</p>
+    </header>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Ruleset YAML</h2>
+        <textarea id="ruleset" spellcheck="false"></textarea>
+        <div class="actions">
+          <input id="ruleset-file" type="file" />
+        </div>
+        <div class="hint">Tempel ruleset di sini atau pilih file. Format v1.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Context</h2>
+        <div class="field">
+          <label for="state">State</label>
+          <select id="state">
+            <option value="normal">NORMAL</option>
+            <option value="degraded">DEGRADED</option>
+            <option value="failover">FAILOVER</option>
+            <option value="recovery">RECOVERY</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="sni">SNI</label>
+          <input id="sni" placeholder="api.zoom.us" />
+        </div>
+        <div class="field">
+          <label for="protocol">Protocol</label>
+          <input id="protocol" placeholder="tcp" />
+        </div>
+        <div class="field">
+          <label for="port">Port</label>
+          <input id="port" placeholder="443" />
+        </div>
+        <div class="field">
+          <label for="latency">Latency (ms)</label>
+          <input id="latency" placeholder="120" />
+        </div>
+        <div class="field">
+          <label for="rtt">RTT (ms)</label>
+          <input id="rtt" placeholder="80" />
+        </div>
+        <div class="actions">
+          <button id="run">Dry Run</button>
+          <button id="load-sample" class="ghost">Load Sample</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Decision</h2>
+        <pre id="decision">No data yet.</pre>
+      </div>
+      <div class="panel">
+        <h2>Logs (tail)</h2>
+        <div class="actions">
+          <button id="refresh-logs" class="ghost">Refresh</button>
+        </div>
+        <pre id="logs">No logs yet.</pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
