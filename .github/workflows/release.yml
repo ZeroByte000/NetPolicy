@@ -24,7 +24,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             artifact: netpolicyd-linux-aarch64.tar.gz
             use_cross: true
-          - os: macos-12
+          - os: macos-14
             target: x86_64-apple-darwin
             artifact: netpolicyd-macos-x86_64.tar.gz
             use_cross: false
@@ -106,17 +106,18 @@ jobs:
         run: |
           rustup target add aarch64-linux-android armv7-linux-androideabi
 
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk --locked
-
       - name: Build (Android)
         run: |
-          cargo ndk -t arm64-v8a -t armeabi-v7a -o target/android build --release --bin netpolicyd
+          TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android21-clang"
+          export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$TOOLCHAIN/armv7a-linux-androideabi21-clang"
+          cargo build --release --bin netpolicyd --target aarch64-linux-android
+          cargo build --release --bin netpolicyd --target armv7-linux-androideabi
 
       - name: Prepare Android assets
         run: |
-          cp target/android/arm64-v8a/release/netpolicyd android/app/src/main/assets/netpolicyd-arm64
-          cp target/android/armeabi-v7a/release/netpolicyd android/app/src/main/assets/netpolicyd-armv7
+          cp target/aarch64-linux-android/release/netpolicyd android/app/src/main/assets/netpolicyd-arm64
+          cp target/armv7-linux-androideabi/release/netpolicyd android/app/src/main/assets/netpolicyd-armv7
 
       - name: Download Xray binaries
         run: |
@@ -185,7 +186,7 @@ jobs:
         run: |
           if [ "${{ matrix.version }}" = "snapshot" ]; then
             BASE_URL="https://downloads.openwrt.org/snapshots/targets/armvirt/${{ matrix.target }}/"
-            SDK_FILE=$(wget -qO- "$BASE_URL" | grep -o "openwrt-sdk-armvirt-${{ matrix.target }}_gcc-[0-9.]*_musl.Linux-x86_64.tar.xz" | head -n1)
+            SDK_FILE=$(wget -qO- "${BASE_URL}sha256sums" | awk '/openwrt-sdk-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
             if [ -z "$SDK_FILE" ]; then
               echo "SDK file not found at $BASE_URL"
               exit 1
@@ -193,7 +194,7 @@ jobs:
             SDK_URL="${BASE_URL}${SDK_FILE}"
           else
             BASE_URL="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/armvirt/${{ matrix.target }}/"
-            SDK_FILE=$(wget -qO- "$BASE_URL" | grep -o "openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-[0-9.]*_musl.Linux-x86_64.tar.xz" | head -n1)
+            SDK_FILE=$(wget -qO- "${BASE_URL}sha256sums" | awk '/openwrt-sdk-${{ matrix.version }}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
             if [ -z "$SDK_FILE" ]; then
               echo "SDK file not found at $BASE_URL"
               exit 1
