@@ -140,20 +140,7 @@ jobs:
             fi
           }
           extract_urls() {
-            python3 -c 'import json,re,sys; data=json.load(sys.stdin); releases=data if isinstance(data,list) else [data]; arm64=""; armv7=""; \
-for rel in releases: \
-    assets=[(a.get("name",""), a.get("browser_download_url","")) for a in rel.get("assets", [])]; \
-    def pick(pats): \
-        for name,url in assets: \
-            for pat in pats: \
-                if re.search(pat,name,re.I): \
-                    return url; \
-        return ""; \
-    arm64=pick([r"android.*arm64.*v8a.*\\.(zip|tgz|tar\\.gz)$", r"android.*arm64.*\\.(zip|tgz|tar\\.gz)$"]); \
-    armv7=pick([r"android.*arm32.*v7a.*\\.(zip|tgz|tar\\.gz)$", r"android.*armv7.*\\.(zip|tgz|tar\\.gz)$"]); \
-    if arm64 and armv7: \
-        break; \
-print(arm64); print(armv7)'
+            python3 -c $'import json,re,sys\n\ndata=json.load(sys.stdin)\nreleases=data if isinstance(data,list) else [data]\narm64=""\narmv7=""\n\nfor rel in releases:\n    assets=[(a.get("name",""), a.get("browser_download_url","")) for a in rel.get("assets", [])]\n    def pick(pats):\n        for name,url in assets:\n            for pat in pats:\n                if re.search(pat,name,re.I):\n                    return url\n        return \"\"\n    arm64=pick([r\"android.*arm64.*v8a.*\\\\.(zip|tgz|tar\\\\.gz)$\", r\"android.*arm64.*\\\\.(zip|tgz|tar\\\\.gz)$\"])\n    armv7=pick([r\"android.*arm32.*v7a.*\\\\.(zip|tgz|tar\\\\.gz)$\", r\"android.*armv7.*\\\\.(zip|tgz|tar\\\\.gz)$\"])\n    if arm64 and armv7:\n        break\n\nprint(arm64)\nprint(armv7)\n'
           }
           ARM64_URL=""
           ARMV7_URL=""
