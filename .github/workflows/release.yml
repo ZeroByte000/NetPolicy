@@ -74,6 +74,8 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: |
             ${{ matrix.artifact }}
 
@@ -138,7 +140,20 @@ jobs:
             fi
           }
           extract_urls() {
-            python3 -c $'import json,re,sys\ndata=json.load(sys.stdin)\nassets=[(a.get("name",""), a.get("browser_download_url","")) for a in data.get("assets", [])]\n\ndef pick(pats):\n    for name,url in assets:\n        for pat in pats:\n            if re.search(pat,name,re.I):\n                return url\n    return \"\"\n\narm64=pick([r\"android.*arm64.*v8a.*\\\\.zip$\", r\"android.*arm64.*\\\\.zip$\"])\narmv7=pick([r\"android.*arm32.*v7a.*\\\\.zip$\", r\"android.*armv7.*\\\\.zip$\"])\nprint(arm64)\nprint(armv7)\n'
+            python3 -c 'import json,re,sys; data=json.load(sys.stdin); releases=data if isinstance(data,list) else [data]; arm64=""; armv7=""; \
+for rel in releases: \
+    assets=[(a.get("name",""), a.get("browser_download_url","")) for a in rel.get("assets", [])]; \
+    def pick(pats): \
+        for name,url in assets: \
+            for pat in pats: \
+                if re.search(pat,name,re.I): \
+                    return url; \
+        return ""; \
+    arm64=pick([r"android.*arm64.*v8a.*\\.(zip|tgz|tar\\.gz)$", r"android.*arm64.*\\.(zip|tgz|tar\\.gz)$"]); \
+    armv7=pick([r"android.*arm32.*v7a.*\\.(zip|tgz|tar\\.gz)$", r"android.*armv7.*\\.(zip|tgz|tar\\.gz)$"]); \
+    if arm64 and armv7: \
+        break; \
+print(arm64); print(armv7)'
           }
           ARM64_URL=""
           ARMV7_URL=""
@@ -154,15 +169,43 @@ jobs:
             fi
           done
           if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
+            for repo in ${XRAY_REPOS}; do
+              if ! XRAY_JSON="$(curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases?per_page=8")"; then
+                continue
+              fi
+              URLS="$(printf '%s' "${XRAY_JSON}" | extract_urls)"
+              ARM64_URL="$(printf '%s' "${URLS}" | sed -n '1p')"
+              ARMV7_URL="$(printf '%s' "${URLS}" | sed -n '2p')"
+              if [ -n "${ARM64_URL}" ] && [ -n "${ARMV7_URL}" ]; then
+                break
+              fi
+            done
+          fi
+          if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
             echo "Xray Android assets not found"
             exit 1
           fi
-          curl -fL --retry 3 --retry-all-errors -o xray-arm64.zip "$ARM64_URL"
-          curl -fL --retry 3 --retry-all-errors -o xray-armv7.zip "$ARMV7_URL"
-          unzip -q xray-arm64.zip -d xray-arm64
-          unzip -q xray-armv7.zip -d xray-armv7
-          cp xray-arm64/xray android/app/src/main/assets/xray-arm64
-          cp xray-armv7/xray android/app/src/main/assets/xray-armv7
+          curl -fL --retry 3 --retry-all-errors -o xray-arm64.pkg "$ARM64_URL"
+          curl -fL --retry 3 --retry-all-errors -o xray-armv7.pkg "$ARMV7_URL"
+          mkdir -p xray-arm64 xray-armv7
+          case "$ARM64_URL" in
+            *.zip) unzip -q xray-arm64.pkg -d xray-arm64 ;;
+            *.tar.gz|*.tgz) tar -xzf xray-arm64.pkg -C xray-arm64 ;;
+            *) echo "Unknown archive for arm64: $ARM64_URL"; exit 1 ;;
+          esac
+          case "$ARMV7_URL" in
+            *.zip) unzip -q xray-armv7.pkg -d xray-armv7 ;;
+            *.tar.gz|*.tgz) tar -xzf xray-armv7.pkg -C xray-armv7 ;;
+            *) echo "Unknown archive for armv7: $ARMV7_URL"; exit 1 ;;
+          esac
+          XRAY_BIN64="$(find xray-arm64 -type f -name xray | head -n1)"
+          XRAY_BINV7="$(find xray-armv7 -type f -name xray | head -n1)"
+          if [ -z "$XRAY_BIN64" ] || [ -z "$XRAY_BINV7" ]; then
+            echo "Xray binary not found in archives"
+            exit 1
+          fi
+          cp "$XRAY_BIN64" android/app/src/main/assets/xray-arm64
+          cp "$XRAY_BINV7" android/app/src/main/assets/xray-armv7
 
       - name: Install Android SDK packages
         run: |
@@ -189,6 +232,8 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: |
             netpolicyd-android-arm64.tar.gz
             netpolicyd-android-armv7.tar.gz
@@ -211,7 +256,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y build-essential unzip xz-utils wget rsync
+        run: sudo apt-get update && sudo apt-get install -y build-essential unzip xz-utils wget rsync zstd
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -231,7 +276,7 @@ jobs:
           if [ "${{ matrix.version }}" = "snapshot" ]; then
             BASE_PREFIX="https://downloads.openwrt.org/snapshots/targets"
             OWRT_VERSION="snapshot"
-            SDK_REGEX="openwrt-sdk-${TARGET_TAG}_gcc-.*_musl.Linux-x86_64.tar.xz"
+            SDK_REGEX="openwrt-sdk-${TARGET_TAG}_gcc-.*_musl.Linux-x86_64.tar.(xz|zst)"
           else
             SERIES="${{ matrix.version }}"
             RELEASE_INDEX="https://downloads.openwrt.org/releases/"
@@ -243,7 +288,7 @@ jobs:
             VERSION="${SERIES}.${LATEST}"
             BASE_PREFIX="https://downloads.openwrt.org/releases/${VERSION}/targets"
             OWRT_VERSION="${VERSION}"
-            SDK_REGEX="openwrt-sdk-${VERSION}-${TARGET_TAG}_gcc-.*_musl.Linux-x86_64.tar.xz"
+            SDK_REGEX="openwrt-sdk-${VERSION}-${TARGET_TAG}_gcc-.*_musl.Linux-x86_64.tar.(xz|zst)"
           fi
           BASE_URL="${BASE_PREFIX}/${TARGET_PATH}/"
           SHA_URL="${BASE_URL}sha256sums"
@@ -258,9 +303,13 @@ jobs:
           echo "OWRT_VERSION=${OWRT_VERSION}" >> $GITHUB_ENV
           echo "OWRT_TARGET=${TARGET_TAG}" >> $GITHUB_ENV
           echo "OWRT_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
-          curl -fL --retry 3 --retry-all-errors -o sdk.tar.xz "$SDK_URL"
+          curl -fL --retry 3 --retry-all-errors -o sdk.tar.pkg "$SDK_URL"
           mkdir sdk
-          tar -xJf sdk.tar.xz -C sdk --strip-components=1
+          case "$SDK_URL" in
+            *.tar.xz) tar -xJf sdk.tar.pkg -C sdk --strip-components=1 ;;
+            *.tar.zst) tar --zstd -xf sdk.tar.pkg -C sdk --strip-components=1 ;;
+            *) echo "Unknown SDK archive: $SDK_URL"; exit 1 ;;
+          esac
 
       - name: Build netpolicyd for OpenWrt
         run: |
@@ -285,5 +334,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           files: |
             netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}-${{ env.OWRT_DEVICE }}.tar.gz
