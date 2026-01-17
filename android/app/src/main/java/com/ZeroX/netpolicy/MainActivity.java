@@ -249,11 +249,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void makeExecutable(File file) throws IOException {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("chmod", "700", file.getAbsolutePath());
-            pb.start();
-        } catch (Exception e) {
-            throw new IOException("chmod failed: " + e.getMessage());
+        if (!file.setExecutable(true, false)) {
+            throw new IOException("chmod failed");
         }
     }
 
