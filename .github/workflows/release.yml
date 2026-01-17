@@ -120,19 +120,58 @@ jobs:
           cp target/armv7-linux-androideabi/release/netpolicyd android/app/src/main/assets/netpolicyd-armv7
 
       - name: Download Xray binaries
+        env:
+          XRAY_REPOS: "XTLS/Xray-core XTLS/Xray-android"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${XRAY_VERSION}" = "latest" ]; then
-            XRAY_JSON=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/latest")
-          else
-            XRAY_JSON=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/tags/v${XRAY_VERSION}")
+          set -euo pipefail
+          auth_header=()
+          if [ -n "${GITHUB_TOKEN:-}" ]; then
+            auth_header=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
           fi
-          ARM64_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm64-v8a.zip\"" | head -n1 | cut -d '"' -f4)
-          ARMV7_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm32-v7a.zip\"" | head -n1 | cut -d '"' -f4)
-          if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
-            XRAY_JSON=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/latest")
-            ARM64_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm64-v8a.zip\"" | head -n1 | cut -d '"' -f4)
-            ARMV7_URL=$(echo "$XRAY_JSON" | grep -o "\"browser_download_url\": \"[^\"]*Xray-android-arm32-v7a.zip\"" | head -n1 | cut -d '"' -f4)
-          fi
+          fetch_json() {
+            local repo="$1"
+            if [ "${XRAY_VERSION}" = "latest" ]; then
+              curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases/latest"
+            else
+              curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases/tags/v${XRAY_VERSION}"
+            fi
+          }
+          extract_urls() {
+            python3 - <<'PY'
+import json
+import re
+import sys
+
+data = json.loads(sys.stdin.read())
+assets = {a.get("name", ""): a.get("browser_download_url", "") for a in data.get("assets", [])}
+
+def find_url(patterns):
+    for name, url in assets.items():
+        for pattern in patterns:
+            if re.search(pattern, name, re.IGNORECASE):
+                return url
+    return ""
+
+arm64 = find_url([r'android.*arm64.*v8a.*\.zip$', r'android.*arm64.*\.zip$'])
+armv7 = find_url([r'android.*arm32.*v7a.*\.zip$', r'android.*armv7.*\.zip$'])
+print(arm64)
+print(armv7)
+PY
+          }
+          ARM64_URL=""
+          ARMV7_URL=""
+          for repo in ${XRAY_REPOS}; do
+            if ! XRAY_JSON="$(fetch_json "${repo}")"; then
+              continue
+            fi
+            URLS="$(printf '%s' "${XRAY_JSON}" | extract_urls)"
+            ARM64_URL="$(printf '%s' "${URLS}" | sed -n '1p')"
+            ARMV7_URL="$(printf '%s' "${URLS}" | sed -n '2p')"
+            if [ -n "${ARM64_URL}" ] && [ -n "${ARMV7_URL}" ]; then
+              break
+            fi
+          done
           if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
             echo "Xray Android assets not found"
             exit 1
@@ -200,16 +239,14 @@ jobs:
 
       - name: Download OpenWrt SDK
         run: |
+          set -euo pipefail
           if [ "${{ matrix.version }}" = "snapshot" ]; then
-            BASE_URL="https://downloads.openwrt.org/snapshots/targets/armvirt/${{ matrix.target }}/"
-            SHA_URL="${BASE_URL}sha256sums"
-            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL" | awk '/openwrt-sdk-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print $2; exit}')
-            if [ -z "$SDK_FILE" ]; then
-              echo "SDK file not found at $BASE_URL"
-              exit 1
-            fi
-            echo "OWRT_VERSION=snapshot" >> $GITHUB_ENV
-            SDK_URL="${BASE_URL}${SDK_FILE}"
+            BASE_PREFIX="https://downloads.openwrt.org/snapshots/targets"
+            OWRT_VERSION="snapshot"
+            CANDIDATES=(
+              "armvirt/${{ matrix.target }}:openwrt-sdk-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz"
+              "armsr/armv8:openwrt-sdk-armsr-armv8_gcc-.*_musl.Linux-x86_64.tar.xz"
+            )
           else
             SERIES="${{ matrix.version }}"
             RELEASE_INDEX="https://downloads.openwrt.org/releases/"
@@ -219,16 +256,37 @@ jobs:
               exit 1
             fi
             VERSION="${SERIES}.${LATEST}"
-            echo "OWRT_VERSION=${VERSION}" >> $GITHUB_ENV
-            BASE_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/armvirt/${{ matrix.target }}/"
-            SHA_URL="${BASE_URL}sha256sums"
-            SDK_FILE=$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL" | awk "/openwrt-sdk-${VERSION}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz/ {print \$2; exit}")
-            if [ -z "$SDK_FILE" ]; then
-              echo "SDK file not found at $BASE_URL"
-              exit 1
-            fi
-            SDK_URL="${BASE_URL}${SDK_FILE}"
+            BASE_PREFIX="https://downloads.openwrt.org/releases/${VERSION}/targets"
+            OWRT_VERSION="${VERSION}"
+            CANDIDATES=(
+              "armvirt/${{ matrix.target }}:openwrt-sdk-${VERSION}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz"
+              "armsr/armv8:openwrt-sdk-${VERSION}-armsr-armv8_gcc-.*_musl.Linux-x86_64.tar.xz"
+            )
           fi
+          SDK_URL=""
+          OWRT_TARGET=""
+          for candidate in "${CANDIDATES[@]}"; do
+            TARGET_PATH="${candidate%%:*}"
+            SDK_REGEX="${candidate#*:}"
+            BASE_URL="${BASE_PREFIX}/${TARGET_PATH}/"
+            SHA_URL="${BASE_URL}sha256sums"
+            if ! SHA_DATA="$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL")"; then
+              continue
+            fi
+            SDK_FILE="$(printf '%s' "${SHA_DATA}" | awk "/${SDK_REGEX}/ {print \$2; exit}")"
+            if [ -n "${SDK_FILE}" ]; then
+              SDK_FILE="${SDK_FILE#\*}"
+              SDK_URL="${BASE_URL}${SDK_FILE}"
+              OWRT_TARGET="${TARGET_PATH//\//-}"
+              break
+            fi
+          done
+          if [ -z "${SDK_URL}" ]; then
+            echo "SDK file not found for ${OWRT_VERSION}"
+            exit 1
+          fi
+          echo "OWRT_VERSION=${OWRT_VERSION}" >> $GITHUB_ENV
+          echo "OWRT_TARGET=${OWRT_TARGET}" >> $GITHUB_ENV
           curl -fL --retry 3 --retry-all-errors -o sdk.tar.xz "$SDK_URL"
           mkdir sdk
           tar -xJf sdk.tar.xz -C sdk --strip-components=1
@@ -251,10 +309,10 @@ jobs:
 
       - name: Package
         run: |
-          tar -czf netpolicyd-openwrt-${{ env.OWRT_VERSION }}-armvirt-${{ matrix.target }}.tar.gz -C dist .
+          tar -czf netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}.tar.gz -C dist .
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            netpolicyd-openwrt-${{ env.OWRT_VERSION }}-armvirt-${{ matrix.target }}.tar.gz
+            netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}.tar.gz
