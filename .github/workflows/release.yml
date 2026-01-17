@@ -131,13 +131,16 @@ jobs:
           if [ -n "${GITHUB_TOKEN:-}" ]; then
             auth_header=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
           fi
-          fetch_json() {
+          fetch_releases() {
             local repo="$1"
             if [ "${XRAY_VERSION}" = "latest" ]; then
-              curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases/latest"
-            else
-              curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases/tags/v${XRAY_VERSION}"
+              curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases?per_page=10"
+              return
             fi
+            if curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases/tags/v${XRAY_VERSION}"; then
+              return
+            fi
+            curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases?per_page=10"
           }
           extract_urls() {
             python3 -c $'import json,re,sys\n\ndata=json.load(sys.stdin)\nreleases=data if isinstance(data,list) else [data]\narm64=""\narmv7=""\n\nfor rel in releases:\n    assets=[(a.get("name",""), a.get("browser_download_url","")) for a in rel.get("assets", [])]\n    def pick(pats):\n        for name,url in assets:\n            for pat in pats:\n                if re.search(pat,name,re.I):\n                    return url\n        return \"\"\n    arm64=pick([r\"android.*arm64.*v8a.*\\\\.(zip|tgz|tar\\\\.gz)$\", r\"android.*arm64.*\\\\.(zip|tgz|tar\\\\.gz)$\"])\n    armv7=pick([r\"android.*arm32.*v7a.*\\\\.(zip|tgz|tar\\\\.gz)$\", r\"android.*armv7.*\\\\.(zip|tgz|tar\\\\.gz)$\"])\n    if arm64 and armv7:\n        break\n\nprint(arm64)\nprint(armv7)\n'
@@ -145,7 +148,7 @@ jobs:
           ARM64_URL=""
           ARMV7_URL=""
           for repo in ${XRAY_REPOS}; do
-            if ! XRAY_JSON="$(fetch_json "${repo}")"; then
+            if ! XRAY_JSON="$(fetch_releases "${repo}")"; then
               continue
             fi
             URLS="$(printf '%s' "${XRAY_JSON}" | extract_urls)"
@@ -155,19 +158,6 @@ jobs:
               break
             fi
           done
-          if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
-            for repo in ${XRAY_REPOS}; do
-              if ! XRAY_JSON="$(curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases?per_page=8")"; then
-                continue
-              fi
-              URLS="$(printf '%s' "${XRAY_JSON}" | extract_urls)"
-              ARM64_URL="$(printf '%s' "${URLS}" | sed -n '1p')"
-              ARMV7_URL="$(printf '%s' "${URLS}" | sed -n '2p')"
-              if [ -n "${ARM64_URL}" ] && [ -n "${ARMV7_URL}" ]; then
-                break
-              fi
-            done
-          fi
           if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
             echo "Xray Android assets not found"
             exit 1
@@ -303,6 +293,8 @@ jobs:
           cd sdk
           cp -r ../openwrt/package/netpolicyd package/
           cp -r ../openwrt/package/luci-app-netpolicyd package/
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
           make defconfig
           make package/netpolicyd/compile V=s
           make package/luci-app-netpolicyd/compile V=s
