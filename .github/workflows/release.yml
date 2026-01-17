@@ -200,8 +200,13 @@ jobs:
       contents: write
     strategy:
       matrix:
-        version: ["22.03", "23.05", "snapshot"]
-        target: ["64"]
+        include:
+          - version: "24.10"
+            target_path: "armsr/armv8"
+            device: "hg680"
+          - version: "24.10"
+            target_path: "armsr/armv8"
+            device: "hg680p"
     steps:
       - uses: actions/checkout@v4
 
@@ -221,13 +226,12 @@ jobs:
       - name: Download OpenWrt SDK
         run: |
           set -euo pipefail
+          TARGET_PATH="${{ matrix.target_path }}"
+          TARGET_TAG="${TARGET_PATH//\//-}"
           if [ "${{ matrix.version }}" = "snapshot" ]; then
             BASE_PREFIX="https://downloads.openwrt.org/snapshots/targets"
             OWRT_VERSION="snapshot"
-            CANDIDATES=(
-              "armvirt/${{ matrix.target }}:openwrt-sdk-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz"
-              "armsr/armv8:openwrt-sdk-armsr-armv8_gcc-.*_musl.Linux-x86_64.tar.xz"
-            )
+            SDK_REGEX="openwrt-sdk-${TARGET_TAG}_gcc-.*_musl.Linux-x86_64.tar.xz"
           else
             SERIES="${{ matrix.version }}"
             RELEASE_INDEX="https://downloads.openwrt.org/releases/"
@@ -239,35 +243,21 @@ jobs:
             VERSION="${SERIES}.${LATEST}"
             BASE_PREFIX="https://downloads.openwrt.org/releases/${VERSION}/targets"
             OWRT_VERSION="${VERSION}"
-            CANDIDATES=(
-              "armvirt/${{ matrix.target }}:openwrt-sdk-${VERSION}-armvirt-${{ matrix.target }}_gcc-.*_musl.Linux-x86_64.tar.xz"
-              "armsr/armv8:openwrt-sdk-${VERSION}-armsr-armv8_gcc-.*_musl.Linux-x86_64.tar.xz"
-            )
+            SDK_REGEX="openwrt-sdk-${VERSION}-${TARGET_TAG}_gcc-.*_musl.Linux-x86_64.tar.xz"
           fi
-          SDK_URL=""
-          OWRT_TARGET=""
-          for candidate in "${CANDIDATES[@]}"; do
-            TARGET_PATH="${candidate%%:*}"
-            SDK_REGEX="${candidate#*:}"
-            BASE_URL="${BASE_PREFIX}/${TARGET_PATH}/"
-            SHA_URL="${BASE_URL}sha256sums"
-            if ! SHA_DATA="$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL")"; then
-              continue
-            fi
-            SDK_FILE="$(printf '%s' "${SHA_DATA}" | awk "/${SDK_REGEX}/ {print \$2; exit}")"
-            if [ -n "${SDK_FILE}" ]; then
-              SDK_FILE="${SDK_FILE#\*}"
-              SDK_URL="${BASE_URL}${SDK_FILE}"
-              OWRT_TARGET="${TARGET_PATH//\//-}"
-              break
-            fi
-          done
-          if [ -z "${SDK_URL}" ]; then
-            echo "SDK file not found for ${OWRT_VERSION}"
+          BASE_URL="${BASE_PREFIX}/${TARGET_PATH}/"
+          SHA_URL="${BASE_URL}sha256sums"
+          SHA_DATA="$(curl -fSL --retry 3 --retry-all-errors "$SHA_URL")"
+          SDK_FILE="$(printf '%s' "${SHA_DATA}" | awk "/${SDK_REGEX}/ {print \$2; exit}")"
+          if [ -z "${SDK_FILE}" ]; then
+            echo "SDK file not found at ${BASE_URL}"
             exit 1
           fi
+          SDK_FILE="${SDK_FILE#\*}"
+          SDK_URL="${BASE_URL}${SDK_FILE}"
           echo "OWRT_VERSION=${OWRT_VERSION}" >> $GITHUB_ENV
-          echo "OWRT_TARGET=${OWRT_TARGET}" >> $GITHUB_ENV
+          echo "OWRT_TARGET=${TARGET_TAG}" >> $GITHUB_ENV
+          echo "OWRT_DEVICE=${{ matrix.device }}" >> $GITHUB_ENV
           curl -fL --retry 3 --retry-all-errors -o sdk.tar.xz "$SDK_URL"
           mkdir sdk
           tar -xJf sdk.tar.xz -C sdk --strip-components=1
@@ -290,10 +280,10 @@ jobs:
 
       - name: Package
         run: |
-          tar -czf netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}.tar.gz -C dist .
+          tar -czf netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}-${{ env.OWRT_DEVICE }}.tar.gz -C dist .
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}.tar.gz
+            netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}-${{ env.OWRT_DEVICE }}.tar.gz
