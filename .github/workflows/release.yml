@@ -71,13 +71,11 @@ jobs:
         run: |
           Compress-Archive -Path "target\\${{ matrix.target }}\\release\\netpolicyd.exe" -DestinationPath "${{ matrix.artifact }}"
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          files: |
-            ${{ matrix.artifact }}
+          name: release-${{ matrix.target }}
+          path: ${{ matrix.artifact }}
 
   android:
     runs-on: ubuntu-latest
@@ -191,12 +189,11 @@ jobs:
           tar -czf netpolicyd-android-arm64.tar.gz -C dist netpolicyd-android-arm64
           cp android/app/build/outputs/apk/release/app-release.apk dist/netpolicyd-android.apk
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          files: |
+          name: release-android
+          path: |
             netpolicyd-android-arm64.tar.gz
             dist/netpolicyd-android.apk
 
@@ -294,10 +291,29 @@ jobs:
         run: |
           tar -czf netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}-${{ env.OWRT_DEVICE }}.tar.gz -C dist .
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-openwrt-${{ env.OWRT_DEVICE }}
+          path: netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}-${{ env.OWRT_DEVICE }}.tar.gz
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, android, openwrt]
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Flatten artifacts
+        run: |
+          mkdir -p upload
+          find dist -type f -maxdepth 3 -exec mv {} upload/ \;
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          files: |
-            netpolicyd-openwrt-${{ env.OWRT_VERSION }}-${{ env.OWRT_TARGET }}-${{ env.OWRT_DEVICE }}.tar.gz
+          files: upload/*
