@@ -187,7 +187,12 @@ jobs:
           mkdir -p dist
           cp target/aarch64-linux-android/release/netpolicyd dist/netpolicyd-android-arm64
           tar -czf netpolicyd-android-arm64.tar.gz -C dist netpolicyd-android-arm64
-          cp android/app/build/outputs/apk/release/app-release.apk dist/netpolicyd-android.apk
+          APK_PATH="$(find android/app/build/outputs/apk/release -name '*.apk' | head -n1)"
+          if [ -z "$APK_PATH" ]; then
+            echo "Release APK not found"
+            exit 1
+          fi
+          cp "$APK_PATH" dist/netpolicyd-android.apk
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
