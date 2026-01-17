@@ -138,7 +138,7 @@ jobs:
             curl -fsSL "${auth_header[@]}" "https://api.github.com/repos/${repo}/releases?per_page=10"
           }
           extract_urls() {
-            python3 -c $'import json,re,sys\n\ndata=json.load(sys.stdin)\nreleases=data if isinstance(data,list) else [data]\narm64=""\narmv7=""\n\nfor rel in releases:\n    assets=[(a.get("name",""), a.get("browser_download_url","")) for a in rel.get("assets", [])]\n    def pick(pats):\n        for name,url in assets:\n            for pat in pats:\n                if re.search(pat,name,re.I):\n                    return url\n        return \"\"\n    arm64=pick([r\"android.*arm64.*v8a.*\\\\.(zip|tgz|tar\\\\.gz)$\", r\"android.*arm64.*\\\\.(zip|tgz|tar\\\\.gz)$\"])\n    armv7=pick([r\"android.*arm32.*v7a.*\\\\.(zip|tgz|tar\\\\.gz)$\", r\"android.*armv7.*\\\\.(zip|tgz|tar\\\\.gz)$\"])\n    if arm64 and armv7:\n        break\n\nprint(arm64)\nprint(armv7)\n'
+            python3 -c $'import json,re,sys\n\ndata=json.load(sys.stdin)\nreleases=data if isinstance(data,list) else [data]\n\narm64=\"\"\nfor rel in releases:\n    assets=[(a.get(\"name\",\"\"), a.get(\"browser_download_url\",\"\")) for a in rel.get(\"assets\", [])]\n    for name,url in assets:\n        if re.search(r\"android.*arm64.*v8a.*\\\\.(zip|tgz|tar\\\\.gz)$\", name, re.I) or re.search(r\"android.*arm64.*\\\\.(zip|tgz|tar\\\\.gz)$\", name, re.I):\n            arm64=url\n            break\n    if arm64:\n        break\n\nprint(arm64)\n'
           }
           ARM64_URL=""
           for repo in ${XRAY_REPOS}; do
