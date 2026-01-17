@@ -218,14 +218,6 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cross
-        run: cargo install cross --locked
-
-      - name: Build netpolicyd binary (OpenWrt)
-        run: |
-          cross build --release --bin netpolicyd --target aarch64-unknown-linux-musl
-          cp target/aarch64-unknown-linux-musl/release/netpolicyd openwrt/package/netpolicyd/files/netpolicyd
-
       - name: Download OpenWrt SDK
         run: |
           set -euo pipefail
@@ -268,6 +260,22 @@ jobs:
             *.tar.zst) tar --zstd -xf sdk.tar.pkg -C sdk --strip-components=1 ;;
             *) echo "Unknown SDK archive: $SDK_URL"; exit 1 ;;
           esac
+      - name: Build netpolicyd binary (OpenWrt)
+        run: |
+          rustup target add aarch64-unknown-linux-musl
+          TOOLCHAIN_DIR="$(find sdk/staging_dir -maxdepth 1 -type d -name 'toolchain-*' | head -n1)"
+          if [ -z "${TOOLCHAIN_DIR}" ]; then
+            echo "OpenWrt toolchain not found"
+            exit 1
+          fi
+          export PATH="${TOOLCHAIN_DIR}/bin:${PATH}"
+          export CC="aarch64-openwrt-linux-musl-gcc"
+          export AR="aarch64-openwrt-linux-musl-ar"
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER="${CC}"
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_AR="${AR}"
+          export RUSTFLAGS="-C target-feature=-crt-static"
+          cargo build --release --bin netpolicyd --target aarch64-unknown-linux-musl
+          cp target/aarch64-unknown-linux-musl/release/netpolicyd openwrt/package/netpolicyd/files/netpolicyd
 
       - name: Build netpolicyd for OpenWrt
         run: |
