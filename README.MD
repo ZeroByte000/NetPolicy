@@ -102,6 +102,7 @@ OpenWrt (HG680/HG680P):
 Android:
 - Download binary `netpolicyd-android-arm64` (arm64-v8a) dari release.
 - APK: download `netpolicyd-android.apk`, install di device, lalu buka aplikasi.
+- Lokasi config Xray: `Download/ZeroX/xray.config.json`.
 - Termux contoh:
   ```bash
   chmod +x netpolicyd-android-arm64

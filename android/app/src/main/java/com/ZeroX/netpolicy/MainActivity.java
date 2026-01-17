@@ -1,15 +1,18 @@
-package com.netpolicy;
+package com.ZeroX.netpolicy;
 
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Button;
 import android.widget.TextView;
 
+import androidx.core.app.ActivityCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -24,6 +27,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -31,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String HOST = "127.0.0.1";
     private static final int PORT = 8787;
     private static final int VPN_REQUEST = 1001;
+    private static final int RUNTIME_PERMISSION_REQUEST = 1002;
     private static final int LOG_LIMIT = 8000;
     private Process process;
     private boolean pendingVpnStart = false;
@@ -62,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
 
+        requestRuntimePermissions();
+
         startVpnButton.setOnClickListener(v -> requestVpnStart());
         stopVpnButton.setOnClickListener(v -> stopVpnService());
         startXrayButton.setOnClickListener(v -> callApi("/api/xray/start", "POST", "", response -> refreshStatus()));
@@ -74,7 +82,8 @@ public class MainActivity extends AppCompatActivity {
                 File bin = prepareBinary();
                 File xrayBin = prepareXrayBinary();
                 File webRoot = prepareWebRoot();
-                startNetPolicy(bin, xrayBin, webRoot);
+                File xrayConfig = prepareXrayConfig();
+                startNetPolicy(bin, xrayBin, webRoot, xrayConfig);
                 mainHandler.post(() -> statusText.setText("NetPolicy: running"));
                 refreshStatus();
             } catch (IOException e) {
@@ -105,6 +114,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != RUNTIME_PERMISSION_REQUEST) {
+            return;
+        }
+        List<String> denied = new ArrayList<>();
+        for (int i = 0; i < permissions.length; i++) {
+            if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                denied.add(permissions[i]);
+            }
+        }
+        if (!denied.isEmpty()) {
+            statusText.setText("Permissions denied: " + denied);
+        }
+    }
+
     private void requestVpnStart() {
         Intent intent = VpnService.prepare(MainActivity.this);
         if (intent != null) {
@@ -113,6 +139,39 @@ public class MainActivity extends AppCompatActivity {
         } else {
             startVpnService();
         }
+    }
+
+    private void requestRuntimePermissions() {
+        List<String> needed = new ArrayList<>();
+        addIfMissing(needed, android.Manifest.permission.ACCESS_FINE_LOCATION);
+        addIfMissing(needed, android.Manifest.permission.ACCESS_COARSE_LOCATION);
+        addIfMissing(needed, android.Manifest.permission.READ_EXTERNAL_STORAGE);
+        addIfMissing(needed, android.Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        if (Build.VERSION.SDK_INT >= 33) {
+            addIfMissing(needed, android.Manifest.permission.POST_NOTIFICATIONS);
+        }
+        if (!needed.isEmpty()) {
+            ActivityCompat.requestPermissions(
+                this,
+                needed.toArray(new String[0]),
+                RUNTIME_PERMISSION_REQUEST
+            );
+        }
+    }
+
+    private void addIfMissing(List<String> needed, String permission) {
+        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(permission);
+        }
+    }
+
+    private File getExternalConfigDir() throws IOException {
+        File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        File dir = new File(downloads, "ZeroX");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("failed to create config dir");
+        }
+        return dir;
     }
 
     private File prepareBinary() throws IOException {
@@ -131,6 +190,24 @@ public class MainActivity extends AppCompatActivity {
         return outFile;
     }
 
+    private File prepareXrayConfig() throws IOException {
+        File dir;
+        try {
+            dir = getExternalConfigDir();
+        } catch (IOException e) {
+            dir = new File(getFilesDir(), "ZeroX");
+            if (!dir.exists() && !dir.mkdirs()) {
+                throw e;
+            }
+            mainHandler.post(() -> statusText.setText("Config dir fallback: " + dir.getAbsolutePath()));
+        }
+        File config = new File(dir, "xray.config.json");
+        if (!config.exists()) {
+            copyAsset("xray.config.json", config);
+        }
+        return config;
+    }
+
     private File prepareWebRoot() throws IOException {
         File webDir = new File(getFilesDir(), "web");
         if (!webDir.exists() && !webDir.mkdirs()) {
@@ -139,13 +216,9 @@ public class MainActivity extends AppCompatActivity {
         return webDir;
     }
 
-    private void startNetPolicy(File bin, File xrayBin, File webRoot) throws IOException {
+    private void startNetPolicy(File bin, File xrayBin, File webRoot, File xrayConfig) throws IOException {
         File logFile = new File(getFilesDir(), "netpolicyd.log");
-        File xrayConfig = new File(getFilesDir(), "config.json");
         File xrayLog = new File(getFilesDir(), "xray.log");
-        if (!xrayConfig.exists()) {
-            copyAsset("web/xray.config.json", xrayConfig);
-        }
         ProcessBuilder pb = new ProcessBuilder(
             bin.getAbsolutePath(),
             "--web",

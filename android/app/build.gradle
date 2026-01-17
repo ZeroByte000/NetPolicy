@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace 'com.netpolicy'
+    namespace 'com.ZeroX.netpolicy'
     compileSdk 34
 
     signingConfigs {
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId 'com.netpolicy'
+        applicationId 'com.ZeroX.netpolicy'
         minSdk 21
         targetSdk 34
         versionCode 1

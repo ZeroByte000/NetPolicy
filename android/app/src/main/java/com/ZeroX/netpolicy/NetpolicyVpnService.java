@@ -1,4 +1,4 @@
-package com.netpolicy;
+package com.ZeroX.netpolicy;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -12,8 +12,8 @@ import android.os.ParcelFileDescriptor;
 import androidx.core.app.NotificationCompat;
 
 public class NetpolicyVpnService extends VpnService {
-    public static final String ACTION_START = "com.netpolicy.VPN_START";
-    public static final String ACTION_STOP = "com.netpolicy.VPN_STOP";
+    public static final String ACTION_START = "com.ZeroX.netpolicy.VPN_START";
+    public static final String ACTION_STOP = "com.ZeroX.netpolicy.VPN_STOP";
     private static final String CHANNEL_ID = "netpolicy_vpn";
     private static boolean running = false;
 
