@@ -199,7 +199,8 @@ public class MainActivity extends AppCompatActivity {
             if (!dir.exists() && !dir.mkdirs()) {
                 throw e;
             }
-            mainHandler.post(() -> statusText.setText("Config dir fallback: " + dir.getAbsolutePath()));
+            File fallbackDir = dir;
+            mainHandler.post(() -> statusText.setText("Config dir fallback: " + fallbackDir.getAbsolutePath()));
         }
         File config = new File(dir, "xray.config.json");
         if (!config.exists()) {
