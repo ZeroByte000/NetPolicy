@@ -123,7 +123,7 @@ jobs:
 
       - name: Download Xray binaries
         env:
-          XRAY_REPOS: "XTLS/Xray-core XTLS/Xray-android"
+          XRAY_REPOS: "XTLS/Xray-core"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -303,8 +303,8 @@ jobs:
         run: |
           cd sdk
           mkdir -p ../dist
-          find bin/packages -name "netpolicyd_*.ipk" -exec cp {} ../dist/ \\;
-          find bin/packages -name "luci-app-netpolicyd_*.ipk" -exec cp {} ../dist/ \\;
+          find bin/packages -name "netpolicyd_*.ipk" -print0 | xargs -0 -I {} cp {} ../dist/
+          find bin/packages -name "luci-app-netpolicyd_*.ipk" -print0 | xargs -0 -I {} cp {} ../dist/
 
       - name: Package
         run: |
