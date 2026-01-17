@@ -106,20 +106,17 @@ jobs:
 
       - name: Install Rust targets (Android)
         run: |
-          rustup target add aarch64-linux-android armv7-linux-androideabi
+          rustup target add aarch64-linux-android
 
       - name: Build (Android)
         run: |
           TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android21-clang"
-          export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$TOOLCHAIN/armv7a-linux-androideabi21-clang"
           cargo build --release --bin netpolicyd --target aarch64-linux-android
-          cargo build --release --bin netpolicyd --target armv7-linux-androideabi
 
       - name: Prepare Android assets
         run: |
           cp target/aarch64-linux-android/release/netpolicyd android/app/src/main/assets/netpolicyd-arm64
-          cp target/armv7-linux-androideabi/release/netpolicyd android/app/src/main/assets/netpolicyd-armv7
 
       - name: Download Xray binaries
         env:
@@ -146,43 +143,33 @@ jobs:
             python3 -c $'import json,re,sys\n\ndata=json.load(sys.stdin)\nreleases=data if isinstance(data,list) else [data]\narm64=""\narmv7=""\n\nfor rel in releases:\n    assets=[(a.get("name",""), a.get("browser_download_url","")) for a in rel.get("assets", [])]\n    def pick(pats):\n        for name,url in assets:\n            for pat in pats:\n                if re.search(pat,name,re.I):\n                    return url\n        return \"\"\n    arm64=pick([r\"android.*arm64.*v8a.*\\\\.(zip|tgz|tar\\\\.gz)$\", r\"android.*arm64.*\\\\.(zip|tgz|tar\\\\.gz)$\"])\n    armv7=pick([r\"android.*arm32.*v7a.*\\\\.(zip|tgz|tar\\\\.gz)$\", r\"android.*armv7.*\\\\.(zip|tgz|tar\\\\.gz)$\"])\n    if arm64 and armv7:\n        break\n\nprint(arm64)\nprint(armv7)\n'
           }
           ARM64_URL=""
-          ARMV7_URL=""
           for repo in ${XRAY_REPOS}; do
             if ! XRAY_JSON="$(fetch_releases "${repo}")"; then
               continue
             fi
             URLS="$(printf '%s' "${XRAY_JSON}" | extract_urls)"
             ARM64_URL="$(printf '%s' "${URLS}" | sed -n '1p')"
-            ARMV7_URL="$(printf '%s' "${URLS}" | sed -n '2p')"
-            if [ -n "${ARM64_URL}" ] && [ -n "${ARMV7_URL}" ]; then
+            if [ -n "${ARM64_URL}" ]; then
               break
             fi
           done
-          if [ -z "$ARM64_URL" ] || [ -z "$ARMV7_URL" ]; then
+          if [ -z "$ARM64_URL" ]; then
             echo "Xray Android assets not found"
             exit 1
           fi
           curl -fL --retry 3 --retry-all-errors -o xray-arm64.pkg "$ARM64_URL"
-          curl -fL --retry 3 --retry-all-errors -o xray-armv7.pkg "$ARMV7_URL"
-          mkdir -p xray-arm64 xray-armv7
+          mkdir -p xray-arm64
           case "$ARM64_URL" in
             *.zip) unzip -q xray-arm64.pkg -d xray-arm64 ;;
             *.tar.gz|*.tgz) tar -xzf xray-arm64.pkg -C xray-arm64 ;;
             *) echo "Unknown archive for arm64: $ARM64_URL"; exit 1 ;;
           esac
-          case "$ARMV7_URL" in
-            *.zip) unzip -q xray-armv7.pkg -d xray-armv7 ;;
-            *.tar.gz|*.tgz) tar -xzf xray-armv7.pkg -C xray-armv7 ;;
-            *) echo "Unknown archive for armv7: $ARMV7_URL"; exit 1 ;;
-          esac
           XRAY_BIN64="$(find xray-arm64 -type f -name xray | head -n1)"
-          XRAY_BINV7="$(find xray-armv7 -type f -name xray | head -n1)"
-          if [ -z "$XRAY_BIN64" ] || [ -z "$XRAY_BINV7" ]; then
+          if [ -z "$XRAY_BIN64" ]; then
             echo "Xray binary not found in archives"
             exit 1
           fi
           cp "$XRAY_BIN64" android/app/src/main/assets/xray-arm64
-          cp "$XRAY_BINV7" android/app/src/main/assets/xray-armv7
 
       - name: Install Android SDK packages
         run: |
@@ -201,9 +188,7 @@ jobs:
         run: |
           mkdir -p dist
           cp target/aarch64-linux-android/release/netpolicyd dist/netpolicyd-android-arm64
-          cp target/armv7-linux-androideabi/release/netpolicyd dist/netpolicyd-android-armv7
           tar -czf netpolicyd-android-arm64.tar.gz -C dist netpolicyd-android-arm64
-          tar -czf netpolicyd-android-armv7.tar.gz -C dist netpolicyd-android-armv7
           cp android/app/build/outputs/apk/release/app-release.apk dist/netpolicyd-android.apk
 
       - name: Release
@@ -213,7 +198,6 @@ jobs:
           name: ${{ github.ref_name }}
           files: |
             netpolicyd-android-arm64.tar.gz
-            netpolicyd-android-armv7.tar.gz
             dist/netpolicyd-android.apk
 
   openwrt:
