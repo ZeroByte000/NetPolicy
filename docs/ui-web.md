@@ -39,7 +39,7 @@ Buka browser:
 
 ## Android (Termux)
 
-1. Download binary sesuai arsitektur (arm64-v8a atau armeabi-v7a) dari Releases.
+1. Download binary arm64-v8a dari Releases.
 2. Simpan binary di direktori kerja dan buat executable:
    ```bash
    chmod +x netpolicyd-android-arm64

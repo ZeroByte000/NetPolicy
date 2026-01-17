@@ -5,3 +5,4 @@ android/.gradle/
 android/app/build/
 android/.idea/
 tag.txt
+netpolicy-release.jks

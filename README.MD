@@ -74,7 +74,7 @@ Opsi 2 (binary):
   - Windows ARM64: `netpolicyd-windows-arm64.zip`
 
 OpenWrt (HG680/HG680P):
-- Download `.ipk` dari release (22.03, 23.05, snapshot) dan install via `opkg`.
+- Download `.ipk` dari release (OpenWrt 24.10, target `armsr/armv8`) dan install via `opkg`.
 - Instal:
   ```bash
   opkg update
@@ -100,21 +100,21 @@ OpenWrt (HG680/HG680P):
   ```
 
 Android:
-- Download binary `netpolicyd-android-arm64` (arm64-v8a) atau `netpolicyd-android-armv7` (armeabi-v7a) dari release.
+- Download binary `netpolicyd-android-arm64` (arm64-v8a) dari release.
 - APK: download `netpolicyd-android.apk`, install di device, lalu buka aplikasi.
 - Termux contoh:
   ```bash
   chmod +x netpolicyd-android-arm64
   ./netpolicyd-android-arm64 --web --bind 127.0.0.1:8787 --web-root web --log-file /data/data/com.termux/files/usr/tmp/netpolicyd.log
   ```
-- APK menyediakan tombol VPN gateway (best effort) dan kontrol Xray via UI.
+- APK memakai UI native (XML + Java) untuk kontrol VPN dan Xray.
 
 Build APK lokal (Android Studio/SDK):
 ```bash
 cd android
 ./gradlew assembleRelease
 ```
-APK ada di `android/app/build/outputs/apk/release/app-release.apk`.
+APK ada di `android/app/build/outputs/apk/release/*.apk`.
 
 ## Penggunaan
 
