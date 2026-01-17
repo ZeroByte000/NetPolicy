@@ -138,26 +138,7 @@ jobs:
             fi
           }
           extract_urls() {
-            python3 - <<'PY'
-import json
-import re
-import sys
-
-data = json.loads(sys.stdin.read())
-assets = {a.get("name", ""): a.get("browser_download_url", "") for a in data.get("assets", [])}
-
-def find_url(patterns):
-    for name, url in assets.items():
-        for pattern in patterns:
-            if re.search(pattern, name, re.IGNORECASE):
-                return url
-    return ""
-
-arm64 = find_url([r'android.*arm64.*v8a.*\.zip$', r'android.*arm64.*\.zip$'])
-armv7 = find_url([r'android.*arm32.*v7a.*\.zip$', r'android.*armv7.*\.zip$'])
-print(arm64)
-print(armv7)
-PY
+            python3 -c $'import json,re,sys\ndata=json.load(sys.stdin)\nassets=[(a.get("name",""), a.get("browser_download_url","")) for a in data.get("assets", [])]\n\ndef pick(pats):\n    for name,url in assets:\n        for pat in pats:\n            if re.search(pat,name,re.I):\n                return url\n    return \"\"\n\narm64=pick([r\"android.*arm64.*v8a.*\\\\.zip$\", r\"android.*arm64.*\\\\.zip$\"])\narmv7=pick([r\"android.*arm32.*v7a.*\\\\.zip$\", r\"android.*armv7.*\\\\.zip$\"])\nprint(arm64)\nprint(armv7)\n'
           }
           ARM64_URL=""
           ARMV7_URL=""
